@@ -51,7 +51,8 @@ class ImpersonalAccount(models.Model):
                 dr_sum=Sum('amount'))['dr_sum'] or Decimal(0)
         cr_sum = cr_splits.aggregate(
                 cr_sum=Sum('amount'))['cr_sum'] or Decimal(0)
-        return {'dr_sum': dr_sum, 'cr_sum': cr_sum}
+        difference = dr_sum - cr_sum
+        return {'dr_sum': dr_sum, 'cr_sum': cr_sum, 'difference': difference}
 
     def __accumulated_balance(self):
         dr_sum = Decimal(0)
@@ -68,7 +69,8 @@ class ImpersonalAccount(models.Model):
                     dr_sum=Sum('amount'))['dr_sum'] or Decimal(0)
             cr_sum += cr_splits.aggregate(
                     cr_sum=Sum('amount'))['cr_sum'] or Decimal(0)
-        return {'dr_sum': dr_sum, 'cr_sum': cr_sum}
+        difference = dr_sum - cr_sum
+        return {'dr_sum': dr_sum, 'cr_sum': cr_sum, 'difference': difference}
 
     def who_am_i(self):
         ac = dict.fromkeys(['parent', 'child', 'single'], None)
@@ -92,23 +94,22 @@ class ImpersonalAccount(models.Model):
     @staticmethod
     def total_current_balance():
         accounts = ImpersonalAccount.objects.all()
-        total_dr_sum = Decimal(0)
-        total_cr_sum = Decimal(0)
+        tds = Decimal(0)
+        tcs = Decimal(0)
         for account in accounts:
             ac = account.who_am_i()
             if ac['child']:
                 continue
             balances = account.current_balance()
-            total_dr_sum += balances['dr_sum']
-            total_cr_sum += balances['cr_sum']
-        return {'total_dr_sum': total_dr_sum, 'total_cr_sum': total_cr_sum}
+            tds += balances['dr_sum']
+            tcs += balances['cr_sum']
+        diff = tds - tcs
+        return {'total_dr_sum': tds, 'total_cr_sum': tcs, 'difference': diff}
 
     @classmethod
     def validate_accounting_equation(cls):
         total_balances = cls.total_current_balance()
-        total_dr_sum = total_balances['total_dr_sum']
-        total_cr_sum = total_balances['total_cr_sum']
-        if total_dr_sum != total_cr_sum:
+        if total_balances['difference'] != 0:
             raise exceptions.AccountingEquationViolationError(
                     'Dr, Cr side not balanced; equation, "AS=LI+CA" not true;')
 
