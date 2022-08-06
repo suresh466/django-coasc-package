@@ -1,8 +1,8 @@
 Metadata-Version: 2.1
 Name: django-coasc
-Version: 0.1
+Version: 0.3
 Summary: A Django app for building double entry accounting systems.
-Home-page: https://github.com/suresh466/
+Home-page: https://github.com/suresh466/django-cosac/
 Author: Suresh Thagunna
 Author-email: suresh.thagunna77@gmail.com
 License: UNKNOWN

@@ -29,6 +29,9 @@ class ImpersonalAccount(models.Model):
     code = models.CharField(
             max_length=255, blank=True, null=True, default=None, unique=True)
 
+    def __str__(self):
+        return f'{self.name} - ({self.code})'
+
     def save(self, *args, **kwargs):
         if not self.parent_ac and not self.type_ac:
             raise exceptions.OrphanAccountCreationError(
@@ -117,6 +120,9 @@ class ImpersonalAccount(models.Model):
 class Transaction(models.Model):
     description = models.TextField(blank=True, default='')
 
+    def __str__(self):
+        return f'{self.pk} - {self.split_set.count()}'
+
 
 class Split(models.Model):
     DEBIT = 'dr'
@@ -130,6 +136,12 @@ class Split(models.Model):
     account = models.ForeignKey(ImpersonalAccount, on_delete=models.PROTECT)
     type_split = models.CharField(max_length=2, choices=TYPE_SPLIT_CHOICES)
     amount = models.DecimalField(decimal_places=2, max_digits=11)
+
+    def __str__(self):
+        str_string = (
+                f'{self.transaction.pk}- {self.account} - {self.type_split} - '
+                f'{self.amount}')
+        return str_string
 
 
 @receiver(signals.pre_save, sender=Split)
