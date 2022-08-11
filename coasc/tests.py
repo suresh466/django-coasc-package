@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.test import TestCase
 
 from coasc.models import ImpersonalAccount
@@ -99,7 +100,7 @@ class AccountModelTest(TestCase):
         self.assertEqual(parent_ac1_balance['dr_sum'], 500)
         self.assertEqual(parent_ac1_balance['cr_sum'], 400)
 
-    def test_total_current_balance(self):
+    def test_total_current_balance_with_no_arguments(self):
         Split.objects.create(
                 transaction=self.transaction1, account=self.single_ac1,
                 type_split='dr', amount=100)
@@ -126,6 +127,47 @@ class AccountModelTest(TestCase):
 
         self.assertEqual(total_dr_sum, 600)
         self.assertEqual(total_cr_sum, 450)
+
+    def test_total_current_balance_with_arguments(self):
+        Split.objects.create(
+                transaction=self.transaction1, account=self.single_ac1,
+                type_split='dr', amount=100)
+        Split.objects.create(
+                transaction=self.transaction1, account=self.child_ac1,
+                type_split='dr', amount=200)
+        Split.objects.create(
+                transaction=self.transaction1, account=self.child_ac2,
+                type_split='dr', amount=300)
+        Split.objects.create(
+                transaction=self.transaction1, account=self.single_ac1,
+                type_split='cr', amount=50)
+        Split.objects.create(
+                transaction=self.transaction1, account=self.child_ac1,
+                type_split='cr', amount=150)
+        Split.objects.create(
+                transaction=self.transaction1, account=self.child_ac2,
+                type_split='cr', amount=450)
+
+        total_current_balance1 = ImpersonalAccount.total_current_balance(
+                type_ac='AS')
+        total_current_balance2 = ImpersonalAccount.total_current_balance(
+                type_ac='LI')
+
+        expected_total_current_balance1 = {
+                'total_dr_sum': Decimal(100.00),
+                'total_cr_sum': Decimal(50.00),
+                'difference': Decimal(50.00)
+        }
+        expected_total_current_balance2 = {
+                'total_dr_sum': Decimal(500.00),
+                'total_cr_sum': Decimal(600.00),
+                'difference': Decimal(-100.00)
+        }
+
+        self.assertEqual(
+                total_current_balance1, expected_total_current_balance1)
+        self.assertEqual(
+                total_current_balance2, expected_total_current_balance2)
 
     def test_validate_accounting_equation(self):
         with self.assertRaises(

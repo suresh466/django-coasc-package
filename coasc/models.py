@@ -94,18 +94,21 @@ class ImpersonalAccount(models.Model):
         if ac['single'] or ac['child']:
             return self.__simple_balance()
 
-    @staticmethod
-    def total_current_balance():
-        accounts = ImpersonalAccount.objects.all()
+    @classmethod
+    def total_current_balance(cls, type_ac=None):
+        if type_ac is None:
+            accounts = cls.objects.filter(parent_ac=None)
+        else:
+            accounts = cls.objects.filter(
+                    type_ac=type_ac, parent_ac=None)
+
         tds = Decimal(0)
         tcs = Decimal(0)
         for account in accounts:
-            ac = account.who_am_i()
-            if ac['child']:
-                continue
             balances = account.current_balance()
             tds += balances['dr_sum']
             tcs += balances['cr_sum']
+
         diff = tds - tcs
         return {'total_dr_sum': tds, 'total_cr_sum': tcs, 'difference': diff}
 
