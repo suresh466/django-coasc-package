@@ -22,6 +22,10 @@ class SelfReferencingError(AccountError):
     pass
 
 
+class SingleAccountIsNotParentError(AccountError):
+    pass
+
+
 class JournalError(Exception):
     pass
 

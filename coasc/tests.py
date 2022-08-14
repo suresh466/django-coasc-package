@@ -38,10 +38,9 @@ class AccountModelTest(TestCase):
 
         self.assertEqual(saved_accounts[2].name, 'child ac1')
         self.assertEqual(saved_accounts[2].parent_ac, self.parent_ac1)
-        self.assertEqual(saved_accounts[2].type_ac, 'LI')
         self.assertEqual(saved_accounts[2].code, '2.1')
 
-    def test_raises_exception_if_type_ac_set_manually_on_child_ac(self):
+    def test_raises_exception_if_type_ac_set_on_child_ac(self):
         with self.assertRaises(exceptions.AccountTypeOnChildAccountError):
             ImpersonalAccount.objects.create(
                     name='child ac2', parent_ac=self.parent_ac1, type_ac='LI',
@@ -62,9 +61,13 @@ class AccountModelTest(TestCase):
         ac2 = self.parent_ac1.who_am_i()
         ac3 = self.child_ac1.who_am_i()
 
-        self.assertTrue(ac1['single'] is True)
-        self.assertTrue(ac2['parent'] is True)
-        self.assertTrue(ac3['child'] is True)
+        self.assertTrue(ac1['single'])
+        self.assertTrue(ac2['parent'])
+        self.assertTrue(ac3['child'])
+
+        self.assertTrue(not ac1['parent'])
+        self.assertTrue(not ac2['child'])
+        self.assertTrue(not ac3['single'])
 
     def test_current_balance(self):
         Split.objects.create(
@@ -185,12 +188,16 @@ class AccountModelTest(TestCase):
             ImpersonalAccount.objects.create(
                     name='orphan_ac1', code='0')
 
-    def test_raises_exception_if_ac_refrences_self_as_parent_ac(self):
-        self_referencing_ac1 = ImpersonalAccount.objects.create(
-                name='self_referencing_ac1', type_ac='AS', code='0')
-        with self.assertRaises(exceptions.SelfReferencingError):
-            self_referencing_ac1.parent_ac = self_referencing_ac1
-            self_referencing_ac1.save()
+    def test_raises_exception_if_single_ac_selected_as_parent(self):
+        single = ImpersonalAccount.objects.create(
+                name='single', code='3', type_ac='AS')
+        tx = Transaction.objects.create(description='demo')
+        Split.objects.create(
+                account=single, type_split='dr', amount=1, transaction=tx)
+
+        with self.assertRaises(exceptions.SingleAccountIsNotParentError):
+            ImpersonalAccount.objects.create(
+                    name='child', code='3.1', parent_ac=single)
 
 
 class TransactionAndSplitModelTest(TestCase):

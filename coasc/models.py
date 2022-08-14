@@ -30,21 +30,8 @@ class ImpersonalAccount(models.Model):
             max_length=255, blank=True, null=True, default=None, unique=True)
 
     def __str__(self):
-        return f'{self.name} - ({self.code})'
-
-    def save(self, *args, **kwargs):
-        if not self.parent_ac and not self.type_ac:
-            raise exceptions.OrphanAccountCreationError(
-                    'must have a parent or type')
-        if self.parent_ac == self:
-            raise exceptions.SelfReferencingError(
-                    'self cannot be a parent of self')
-        if self.parent_ac and self.type_ac:
-            raise exceptions.AccountTypeOnChildAccountError(
-                    'manually setting type on a child not allowed')
-        if self.parent_ac:
-            self.type_ac = self.parent_ac.type_ac
-        super(ImpersonalAccount, self).save(*args, **kwargs)
+        string = f'{self.name}->({self.code})'
+        return string
 
     def __simple_balance(self):
         account_splits = self.split_set.all()
@@ -77,15 +64,19 @@ class ImpersonalAccount(models.Model):
 
     def who_am_i(self):
         ac = dict.fromkeys(['parent', 'child', 'single'], None)
-        if self.impersonalaccount_set.exists():
-            ac['parent'] = True
-            return ac
-        if self.parent_ac:
+        if not self.type_ac:
             ac['child'] = True
             return ac
-        if not self.impersonalaccount_set.exists() and not self.parent_ac:
+
+        elif self.impersonalaccount_set.exists():
+            ac['parent'] = True
+            return ac
+
+        elif self.type_ac and not self.impersonalaccount_set.exists():
             ac['single'] = True
             return ac
+        else:
+            return 'Something went wrong! Maybe this account should not exist'
 
     def current_balance(self):
         ac = self.who_am_i()
@@ -99,8 +90,7 @@ class ImpersonalAccount(models.Model):
         if type_ac is None:
             accounts = cls.objects.filter(parent_ac=None)
         else:
-            accounts = cls.objects.filter(
-                    type_ac=type_ac, parent_ac=None)
+            accounts = cls.objects.filter(type_ac=type_ac, parent_ac=None)
 
         tds = Decimal(0)
         tcs = Decimal(0)
@@ -120,11 +110,29 @@ class ImpersonalAccount(models.Model):
                     'Dr, Cr side not balanced; equation, "AS=LI+CA" not true;')
 
 
+@receiver(signals.pre_save, sender=ImpersonalAccount)
+def raise_exceptions_impersonalaccount(sender, **kwargs):
+    ac_instance = kwargs['instance']
+    if not ac_instance.parent_ac and not ac_instance.type_ac:
+        raise exceptions.OrphanAccountCreationError(
+                'must have a parent or type')
+
+    elif ac_instance.parent_ac:
+        if ac_instance.type_ac:
+            raise exceptions.AccountTypeOnChildAccountError(
+                    'type on a child not allowed')
+
+        elif ac_instance.parent_ac.split_set.exists():
+            raise exceptions.SingleAccountIsNotParentError(
+                    'single account cannot be a parent')
+
+
 class Transaction(models.Model):
     description = models.TextField(blank=True, default='')
 
     def __str__(self):
-        return f'{self.pk} - {self.split_set.count()}'
+        string = f'{self.pk}->{self.split_set.count()}'
+        return string
 
 
 class Split(models.Model):
@@ -141,14 +149,12 @@ class Split(models.Model):
     amount = models.DecimalField(decimal_places=2, max_digits=11)
 
     def __str__(self):
-        str_string = (
-                f'{self.transaction.pk}- {self.account} - {self.type_split} - '
-                f'{self.amount}')
-        return str_string
+        string = (f'{self.transaction.pk}->{self.type_split}={self.amount}')
+        return string
 
 
 @receiver(signals.pre_save, sender=Split)
-def check_for_exceptions(sender, **kwargs):
+def raise_exceptions_split(sender, **kwargs):
     split_instance = kwargs['instance']
     if (split_instance.account.who_am_i())['parent']:
         raise exceptions.TransactionOnParentAcError(
