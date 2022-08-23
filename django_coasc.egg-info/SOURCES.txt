@@ -10,6 +10,8 @@ coasc/models.py
 coasc/tests.py
 coasc/views.py
 coasc/migrations/0001_initial.py
+coasc/migrations/0002_rename_parent_ac_impersonalaccount_p_ac_and_more.py
+coasc/migrations/0003_rename_account_split_ac_rename_amount_split_am_and_more.py
 coasc/migrations/__init__.py
 django_coasc.egg-info/PKG-INFO
 django_coasc.egg-info/SOURCES.txt
