@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from coasc.models import ImpersonalAccount
+from coasc.models import ImpersonalAc
 from coasc import exceptions
 from coasc.models import Transaction, Split
 
@@ -9,13 +9,13 @@ class AccountModelTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.single = ImpersonalAccount.objects.create(
+        cls.single = ImpersonalAc.objects.create(
                 name='single', t_ac='LI', code='1')
-        cls.parent = ImpersonalAccount.objects.create(
+        cls.parent = ImpersonalAc.objects.create(
                 name='parent', t_ac='EX', code='2')
-        cls.child = ImpersonalAccount.objects.create(
+        cls.child = ImpersonalAc.objects.create(
                 name='child', p_ac=cls.parent, code='2.1')
-        cls.child1 = ImpersonalAccount.objects.create(
+        cls.child1 = ImpersonalAc.objects.create(
                 name='child1', p_ac=cls.parent, code='2.2')
 
         cls.tx = Transaction.objects.create(desc='tx')
@@ -32,7 +32,7 @@ class AccountModelTest(TestCase):
         Split.objects.create(tx=cls.tx, ac=cls.child1, t_sp='cr', am=6)
 
     def test_create_and_retreive(self):
-        saved_accounts = ImpersonalAccount.objects.all()
+        saved_accounts = ImpersonalAc.objects.all()
 
         self.assertEqual(saved_accounts.count(), 4)
         self.assertEqual(saved_accounts[0].code, '1')
@@ -41,7 +41,7 @@ class AccountModelTest(TestCase):
 
     def test_raises_exception_if_t_ac_set_on_child(self):
         with self.assertRaises(exceptions.AccountTypeOnChildAccountError):
-            ImpersonalAccount.objects.create(
+            ImpersonalAc.objects.create(
                     name='child ac2', p_ac=self.parent, t_ac='LI',
                     code='2.2')
 
@@ -76,7 +76,7 @@ class AccountModelTest(TestCase):
         self.assertEqual(parent_bal, expected_parent_bal)
 
     def test_total_bal_with_no_args(self):
-        total_bal = ImpersonalAccount.total_bal()
+        total_bal = ImpersonalAc.total_bal()
 
         expected_total_bal = {
                 'total_dr_sum': 30, 'total_cr_sum': 30, 'diff': 0
@@ -85,8 +85,8 @@ class AccountModelTest(TestCase):
         self.assertEqual(total_bal, expected_total_bal)
 
     def test_total_bal_with_args(self):
-        li_total_bal = ImpersonalAccount.total_bal(t_ac='LI')
-        ex_total_bal = ImpersonalAccount.total_bal(t_ac='EX')
+        li_total_bal = ImpersonalAc.total_bal(t_ac='LI')
+        ex_total_bal = ImpersonalAc.total_bal(t_ac='EX')
 
         li_expected_total_bal = {
                 'total_dr_sum': 15, 'total_cr_sum': 15, 'diff': 0
@@ -102,20 +102,20 @@ class AccountModelTest(TestCase):
         with self.assertRaises(exceptions.AccountingEquationViolationError):
             Split.objects.create(tx=self.tx, ac=self.single, t_sp='dr', am=100)
             Split.objects.create(tx=self.tx, ac=self.child, t_sp='cr', am=50)
-            ImpersonalAccount.validate_accounting_equation()
+            ImpersonalAc.validate_accounting_equation()
 
     def test_raises_exception_if_ac_has_no_parent_and_type_ac(self):
         with self.assertRaises(exceptions.OrphanAccountCreationError):
-            ImpersonalAccount.objects.create(name='orphan', code='0')
+            ImpersonalAc.objects.create(name='orphan', code='0')
 
     def test_raises_exception_if_single_ac_selected_as_parent(self):
-        single = ImpersonalAccount.objects.create(
+        single = ImpersonalAc.objects.create(
                 name='single', code='3', t_ac='AS')
         tx = Transaction.objects.create(desc='demo')
         Split.objects.create(tx=tx, ac=single, t_sp='dr', am=1)
 
         with self.assertRaises(exceptions.SingleAccountIsNotParentError):
-            ImpersonalAccount.objects.create(
+            ImpersonalAc.objects.create(
                     name='child', code='3.1', p_ac=single)
 
 
@@ -123,11 +123,11 @@ class TransactionAndSplitModelTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.single = ImpersonalAccount.objects.create(
+        cls.single = ImpersonalAc.objects.create(
                 name='single', t_ac='AS', code='1')
-        cls.parent = ImpersonalAccount.objects.create(
+        cls.parent = ImpersonalAc.objects.create(
                 name='parent', t_ac='LI', code='2')
-        cls.child = ImpersonalAccount.objects.create(
+        cls.child = ImpersonalAc.objects.create(
                 name='child', p_ac=cls.parent, code='2.1')
 
         cls.tx = Transaction.objects.create(desc='tx')

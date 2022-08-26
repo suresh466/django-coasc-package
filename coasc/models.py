@@ -9,7 +9,7 @@ from django.db.models import signals
 from coasc import exceptions
 
 
-class ImpersonalAccount(models.Model):
+class ImpersonalAc(models.Model):
     ASSET = 'AS'
     LIABILITY = 'LI'
     INCOME = 'IN'
@@ -37,10 +37,10 @@ class ImpersonalAccount(models.Model):
         if not self.t_ac:
             ac_is['child'] = True
             return ac_is
-        elif self.impersonalaccount_set.exists():
+        elif self.impersonalac_set.exists():
             ac_is['parent'] = True
             return ac_is
-        elif self.t_ac and not self.impersonalaccount_set.exists():
+        elif self.t_ac and not self.impersonalac_set.exists():
             ac_is['single'] = True
             return ac_is
         else:
@@ -86,8 +86,8 @@ class ImpersonalAccount(models.Model):
                     'Dr, Cr side not balanced; equation, "AS=LI+CA" not true;')
 
 
-@receiver(signals.pre_save, sender=ImpersonalAccount)
-def raise_exceptions_impersonalaccount(sender, **kwargs):
+@receiver(signals.pre_save, sender=ImpersonalAc)
+def raise_exceptions_impersonalac(sender, **kwargs):
     ac_instance = kwargs['instance']
     if not ac_instance.p_ac and not ac_instance.t_ac:
         raise exceptions.OrphanAccountCreationError(
@@ -119,7 +119,7 @@ class Split(models.Model):
         (CREDIT, 'Credit'),
     ]
     tx = models.ForeignKey(Transaction, on_delete=models.PROTECT)
-    ac = models.ForeignKey(ImpersonalAccount, on_delete=models.PROTECT)
+    ac = models.ForeignKey(ImpersonalAc, on_delete=models.PROTECT)
     t_sp = models.CharField(max_length=2, choices=TYPE_SPLIT_CHOICES)
     am = models.DecimalField(decimal_places=2, max_digits=11)
 
