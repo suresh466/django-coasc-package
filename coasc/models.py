@@ -9,22 +9,24 @@ from django.db.models import signals
 from coasc import exceptions
 
 
-class ImpersonalAc(models.Model):
+class Ac(models.Model):
     ASSET = 'AS'
     LIABILITY = 'LI'
     INCOME = 'IN'
     EXPENSES = 'EX'
-    TYPE_AC_CHOICES = [
+
+    CATEGORY_CHOICES = [
         (ASSET, 'Asset'),
         (LIABILITY, 'Liability'),
         (INCOME, 'Income'),
         (EXPENSES, 'Expense'),
     ]
+
     name = models.CharField(max_length=255)
     p_ac = models.ForeignKey(
             'self', null=True, blank=True, default=None,
             on_delete=models.PROTECT)
-    t_ac = models.CharField(max_length=2, blank=True, choices=TYPE_AC_CHOICES)
+    cat = models.CharField(max_length=2, blank=True, choices=CATEGORY_CHOICES)
     code = models.CharField(
             max_length=255, blank=True, null=True, default=None, unique=True)
 
@@ -34,13 +36,13 @@ class ImpersonalAc(models.Model):
 
     def who_am_i(self):
         ac_is = dict.fromkeys(['parent', 'child', 'single'], None)
-        if not self.t_ac:
+        if not self.cat:
             ac_is['child'] = True
             return ac_is
-        elif self.impersonalac_set.exists():
+        elif self.ac_set.exists():
             ac_is['parent'] = True
             return ac_is
-        elif self.t_ac and not self.impersonalac_set.exists():
+        elif self.cat and not self.ac_set.exists():
             ac_is['single'] = True
             return ac_is
         else:
@@ -62,11 +64,11 @@ class ImpersonalAc(models.Model):
         return {'dr_sum': dr_sum, 'cr_sum': cr_sum, 'diff': diff}
 
     @classmethod
-    def total_bal(cls, t_ac=None):
-        if t_ac is None:
+    def total_bal(cls, cat=None):
+        if cat is None:
             acs = cls.objects.filter(p_ac=None)
         else:
-            acs = cls.objects.filter(t_ac=t_ac)
+            acs = cls.objects.filter(cat=cat)
 
         tds = Decimal(0)
         tcs = Decimal(0)
@@ -86,17 +88,17 @@ class ImpersonalAc(models.Model):
                     'Dr, Cr side not balanced; equation, "AS=LI+CA" not true;')
 
 
-@receiver(signals.pre_save, sender=ImpersonalAc)
-def raise_exceptions_impersonalac(sender, **kwargs):
+@receiver(signals.pre_save, sender=Ac)
+def raise_exceptions_ac(sender, **kwargs):
     ac_instance = kwargs['instance']
-    if not ac_instance.p_ac and not ac_instance.t_ac:
+    if not ac_instance.p_ac and not ac_instance.cat:
         raise exceptions.OrphanAccountCreationError(
-                'must have a parent or type')
+                'must have a parent or category')
 
     elif ac_instance.p_ac:
-        if ac_instance.t_ac:
+        if ac_instance.cat:
             raise exceptions.AccountTypeOnChildAccountError(
-                    'type on a child not allowed')
+                    'category on a child not allowed')
 
         elif ac_instance.p_ac.split_set.exists():
             raise exceptions.SingleAccountIsNotParentError(
@@ -119,7 +121,7 @@ class Split(models.Model):
         (CREDIT, 'Credit'),
     ]
     tx = models.ForeignKey(Transaction, on_delete=models.PROTECT)
-    ac = models.ForeignKey(ImpersonalAc, on_delete=models.PROTECT)
+    ac = models.ForeignKey(Ac, on_delete=models.PROTECT)
     t_sp = models.CharField(max_length=2, choices=TYPE_SPLIT_CHOICES)
     am = models.DecimalField(decimal_places=2, max_digits=11)
 
