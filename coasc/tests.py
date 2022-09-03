@@ -9,12 +9,14 @@ class AccountModelTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.single = Ac.objects.create(name='single', cat='LI', code='1')
-        cls.parent = Ac.objects.create(name='parent', cat='EX', code='2')
+        cls.single = Ac.objects.create(
+                name='single', cat='LI', t_ac='I', code='1')
+        cls.parent = Ac.objects.create(
+                name='parent', cat='EX', t_ac='I', code='2')
         cls.child = Ac.objects.create(
-                name='child', p_ac=cls.parent, code='2.1')
+                name='child', p_ac=cls.parent, t_ac='I', code='2.1')
         cls.child1 = Ac.objects.create(
-                name='child1', p_ac=cls.parent, code='2.2')
+                name='child1', p_ac=cls.parent, t_ac='I', code='2.2')
 
         cls.tx = Transaction.objects.create(desc='tx')
 
@@ -40,7 +42,7 @@ class AccountModelTest(TestCase):
     def test_raises_exception_if_cat_set_on_child(self):
         with self.assertRaises(exceptions.AccountTypeOnChildAccountError):
             Ac.objects.create(
-                    name='child ac2', p_ac=self.parent, cat='LI',
+                    name='child ac2', p_ac=self.parent, cat='LI', t_ac='I',
                     code='2.2')
 
     def test_raises_exception_if_p_ac_selected_as_a_splicat(self):
@@ -119,10 +121,12 @@ class TransactionAndSplitModelTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.single = Ac.objects.create(name='single', cat='AS', code='1')
-        cls.parent = Ac.objects.create(name='parent', cat='LI', code='2')
+        cls.single = Ac.objects.create(
+                name='single', cat='AS', t_ac='I', code='1')
+        cls.parent = Ac.objects.create(
+                name='parent', cat='LI', t_ac='I', code='2')
         cls.child = Ac.objects.create(
-                name='child', p_ac=cls.parent, code='2.1')
+                name='child', p_ac=cls.parent, t_ac='I', code='2.1')
 
         cls.tx = Transaction.objects.create(desc='tx')
 

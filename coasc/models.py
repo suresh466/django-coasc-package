@@ -22,11 +22,20 @@ class Ac(models.Model):
         (EXPENSES, 'Expense'),
     ]
 
+    PERSONAL = 'P'
+    IMPERSONAL = 'I'
+
+    TYPE_AC_CHOICES = [
+            (PERSONAL, 'Personal'),
+            (IMPERSONAL, 'Impersonal'),
+    ]
+
     name = models.CharField(max_length=255)
     p_ac = models.ForeignKey(
             'self', null=True, blank=True, default=None,
             on_delete=models.PROTECT)
     cat = models.CharField(max_length=2, blank=True, choices=CATEGORY_CHOICES)
+    t_ac = models.CharField(max_length=1, choices=TYPE_AC_CHOICES)
     code = models.CharField(
             max_length=255, blank=True, null=True, default=None, unique=True)
 
