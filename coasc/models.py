@@ -9,6 +9,15 @@ from django.db.models import signals
 from coasc import exceptions
 
 
+class Member(models.Model):
+    name = models.CharField(max_length=255)
+    code = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        string = f'{self.name}->{self.code}'
+        return string
+
+
 class Ac(models.Model):
     ASSET = 'AS'
     LIABILITY = 'LI'
@@ -33,6 +42,9 @@ class Ac(models.Model):
     name = models.CharField(max_length=255)
     p_ac = models.ForeignKey(
             'self', null=True, blank=True, default=None,
+            on_delete=models.PROTECT)
+    mem = models.ForeignKey(
+            Member, null=True, blank=True, default=None,
             on_delete=models.PROTECT)
     cat = models.CharField(max_length=2, blank=True, choices=CATEGORY_CHOICES)
     t_ac = models.CharField(max_length=1, choices=TYPE_AC_CHOICES)
@@ -112,6 +124,16 @@ def raise_exceptions_ac(sender, **kwargs):
         elif ac_instance.p_ac.split_set.exists():
             raise exceptions.SingleAccountIsNotParentError(
                     'single account cannot be a parent')
+
+    elif ac_instance.t_ac == 'P':
+        if ac_instance.mem is None:
+            raise exceptions.MemberRequiredOnPersonalAcError(
+                    'Personal Ac must have a member')
+
+    elif ac_instance.t_ac == 'I':
+        if ac_instance.mem:
+            raise exceptions.MemberOnImpersonalAcError(
+                    'Impersonal Ac cannot have a member')
 
 
 class Transaction(models.Model):

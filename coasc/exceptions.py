@@ -26,6 +26,14 @@ class SingleAccountIsNotParentError(AccountError):
     pass
 
 
+class MemberRequiredOnPersonalAcError(AccountError):
+    pass
+
+
+class MemberOnImpersonalAcError(AccountError):
+    pass
+
+
 class JournalError(Exception):
     pass
 
