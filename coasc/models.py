@@ -116,7 +116,7 @@ def raise_exceptions_ac(sender, **kwargs):
         raise exceptions.OrphanAccountCreationError(
                 'must have a parent or category')
 
-    elif ac_instance.p_ac:
+    if ac_instance.p_ac:
         if ac_instance.cat:
             raise exceptions.AccountTypeOnChildAccountError(
                     'category on a child not allowed')
@@ -125,12 +125,12 @@ def raise_exceptions_ac(sender, **kwargs):
             raise exceptions.SingleAccountIsNotParentError(
                     'single account cannot be a parent')
 
-    elif ac_instance.t_ac == 'P':
+    if ac_instance.t_ac == 'P':
         if ac_instance.mem is None:
             raise exceptions.MemberRequiredOnPersonalAcError(
                     'Personal Ac must have a member')
 
-    elif ac_instance.t_ac == 'I':
+    if ac_instance.t_ac == 'I':
         if ac_instance.mem:
             raise exceptions.MemberOnImpersonalAcError(
                     'Impersonal Ac cannot have a member')

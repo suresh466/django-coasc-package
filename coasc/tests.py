@@ -55,7 +55,7 @@ class AccountModelTest(TestCase):
         with self.assertRaises(exceptions.AccountTypeOnChildAccountError):
             Ac.objects.create(
                     name='child ac2', p_ac=self.parent, cat='LI', t_ac='I',
-                    code='2.2')
+                    code='2.3')
 
     def test_raises_exception_if_p_ac_selected_as_a_splicat(self):
         Split.objects.create(tx=self.tx, ac=self.single, t_sp='dr', am=100)
@@ -132,11 +132,20 @@ class AccountModelTest(TestCase):
         with self.assertRaises(exceptions.MemberRequiredOnPersonalAcError):
             Ac.objects.create(name='single', code=4, cat='LI', t_ac='P')
 
+        with self.assertRaises(exceptions.MemberRequiredOnPersonalAcError):
+            Ac.objects.create(
+                    name='child', code=2.3, t_ac='P', p_ac=self.parent)
+
     def test_raises_exception_if_impersonal_ac_has_member(self):
         mem = Member.objects.create(name='ln fn', code=1)
         with self.assertRaises(exceptions.MemberOnImpersonalAcError):
             Ac.objects.create(
                     name='single', code=5, cat='LI', t_ac='I', mem=mem)
+
+        with self.assertRaises(exceptions.MemberOnImpersonalAcError):
+            Ac.objects.create(
+                    name='child', code=2.3, t_ac='I',
+                    p_ac=self.parent, mem=mem)
 
 
 class TransactionAndSplitModelTest(TestCase):
