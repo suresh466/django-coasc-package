@@ -1,8 +1,9 @@
 from decimal import Decimal
 
 from django.db import models
-from django.db.models import Sum, signals
+from django.db.models import Q, Sum, signals
 from django.dispatch import receiver
+from django.utils import timezone
 
 from coasc import exceptions
 
@@ -68,23 +69,29 @@ class Ac(models.Model):
         else:
             return "Something went wrong! Maybe this account should not exist"
 
-    def bal(self):
+    def bal(self, start_date=None, end_date=None):
         if self.who_am_i()["parent"]:
             sps = Split.objects.filter(ac__p_ac=self)
         else:
             sps = self.split_set.all()
 
-        dr_sps = sps.filter(t_sp="dr")
-        cr_sps = sps.filter(t_sp="cr")
+        if start_date:
+            sps = sps.filter(tx__date_created__gte=start_date)
+        if end_date:
+            sps = sps.filter(tx__date_created__lte=end_date)
 
-        dr_sum = dr_sps.aggregate(dr_sum=Sum("am"))["dr_sum"] or 0
-        cr_sum = cr_sps.aggregate(cr_sum=Sum("am"))["cr_sum"] or 0
+        aggregates = sps.aggregate(
+            dr_sum=Sum("am", filter=Q(t_sp="dr")), cr_sum=Sum("am", filter=Q(t_sp="cr"))
+        )
+
+        dr_sum = aggregates["dr_sum"] or Decimal(0)
+        cr_sum = aggregates["cr_sum"] or Decimal(0)
         diff = dr_sum - cr_sum
 
         return {"dr_sum": dr_sum, "cr_sum": cr_sum, "diff": diff}
 
     @classmethod
-    def total_bal(cls, cat=None):
+    def total_bal(cls, cat=None, start_date=None, end_date=None):
         # if no category in argument, get all parent and single accounts
         if cat is None:
             acs = cls.objects.filter(p_ac=None)
@@ -96,7 +103,7 @@ class Ac(models.Model):
         tds = Decimal(0)
         tcs = Decimal(0)
         for ac in acs:
-            bals = ac.bal()
+            bals = ac.bal(start_date, end_date)
             tds += bals["dr_sum"]
             tcs += bals["cr_sum"]
         diff = tds - tcs
@@ -143,7 +150,8 @@ def raise_exceptions_ac(sender, **kwargs):
 
 
 class Transaction(models.Model):
-    date_created = models.DateTimeField(auto_now_add=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
+    tx_date = models.DateField(default=timezone.now)
     desc = models.TextField(blank=True, default="")
 
     def __str__(self):
