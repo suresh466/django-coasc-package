@@ -18,6 +18,8 @@ coasc/migrations/0006_ac_t_ac.py
 coasc/migrations/0007_member.py
 coasc/migrations/0008_ac_mem.py
 coasc/migrations/0009_transaction_date_created.py
+coasc/migrations/0010_rename_date_created_transaction_created_at.py
+coasc/migrations/0011_transaction_tx_date.py
 coasc/migrations/__init__.py
 django_coasc.egg-info/PKG-INFO
 django_coasc.egg-info/SOURCES.txt

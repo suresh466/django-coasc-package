@@ -76,9 +76,9 @@ class Ac(models.Model):
             sps = self.split_set.all()
 
         if start_date:
-            sps = sps.filter(tx__date_created__gte=start_date)
+            sps = sps.filter(tx__tx_date__gte=start_date)
         if end_date:
-            sps = sps.filter(tx__date_created__lte=end_date)
+            sps = sps.filter(tx__tx_date__lte=end_date)
 
         aggregates = sps.aggregate(
             dr_sum=Sum("am", filter=Q(t_sp="dr")), cr_sum=Sum("am", filter=Q(t_sp="cr"))
