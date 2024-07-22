@@ -1,7 +1,7 @@
 from django.test import TestCase
 
-from coasc.models import Ac, Transaction, Split, Member
 from coasc import exceptions
+from coasc.models import Ac, Member, Split, Transaction
 
 
 class MemberModelTest(TestCase):
@@ -51,7 +51,7 @@ class AccountModelTest(TestCase):
         self.assertEqual(saved_accounts[2].code, "2.1")
 
     def test_raises_exception_if_cat_set_on_child(self):
-        with self.assertRaises(exceptions.AccountTypeOnChildAccountError):
+        with self.assertRaises(exceptions.CategoryOnChildAccountError):
             Ac.objects.create(
                 name="child ac2", p_ac=self.parent, cat="LI", t_ac="I", code="2.3"
             )
@@ -110,7 +110,7 @@ class AccountModelTest(TestCase):
             Ac.validate_accounting_equation()
 
     def test_raises_exception_if_ac_has_no_parent_and_category(self):
-        with self.assertRaises(exceptions.OrphanAccountCreationError):
+        with self.assertRaises(exceptions.InvalidAccountError):
             Ac.objects.create(name="orphan", code="0")
 
     def test_raises_exception_if_single_ac_selected_as_parent(self):
@@ -118,7 +118,7 @@ class AccountModelTest(TestCase):
         tx = Transaction.objects.create(desc="demo")
         Split.objects.create(tx=tx, ac=single, t_sp="dr", am=1)
 
-        with self.assertRaises(exceptions.SingleAccountIsNotParentError):
+        with self.assertRaises(exceptions.StandaloneAccountCannotBeParentError()):
             Ac.objects.create(name="child", code="3.1", p_ac=single)
 
     def test_raises_exception_if_personal_ac_has_no_member(self):
@@ -168,8 +168,3 @@ class TransactionAndSplitModelTest(TestCase):
         self.assertEqual(saved_splits[1].ac, self.child)
         self.assertEqual(saved_splits[1].t_sp, "cr")
         self.assertEqual(saved_splits[1].am, 9)
-
-    def test_raises_exception_if_split_amount_zero(self):
-        Split.objects.create(tx=self.tx, ac=self.single, t_sp="dr", am=100)
-        with self.assertRaises(exceptions.ZeroAmountError):
-            Split.objects.create(tx=self.tx, ac=self.child, t_sp="cr", am=0)

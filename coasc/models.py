@@ -1,7 +1,25 @@
+"""
+Coasc: Comprehensive Accounting System
+
+This module implements a double-entry bookkeeping system with support for
+hierarchical accounts, transactions, and splits. It provides functionality
+for managing accounts, recording transactions, and generating balance reports.
+
+Key components:
+- Member: Represents individuals or entities associated with accounts.
+- Ac (Account): The core entity representing different types of accounts.
+- Transaction: Represents financial transactions.
+- Split: Represents individual debit or credit entries within a transaction.
+
+The system enforces various accounting rules and constraints to maintain
+data integrity and adherence to accounting principles.
+"""
+
 from decimal import Decimal
 
-from django.db import models
-from django.db.models import Q, Sum, signals
+from django.db import models, transaction
+from django.db.models import Case, F, Sum, When, signals
+from django.db.models.query import Q
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -9,15 +27,38 @@ from coasc import exceptions
 
 
 class Member(models.Model):
+    """
+    Represents a member associated with personal accounts.
+
+    Attributes:
+        name (str): The name of the member.
+        code (str): A unique code identifying the member.
+    """
+
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=255, unique=True)
 
     def __str__(self):
-        string = f"{self.name}->{self.code}"
+        string = f"{self.name} ({self.code})"
         return string
 
 
 class Ac(models.Model):
+    """
+    Represents an account in the accounting system.
+
+    Accounts can be hierarchical (parent-child relationship) and are categorized
+    into different types (Asset, Liability, Income, Expense).
+
+    Attributes:
+        name (str): The name of the account.
+        t_ac (str): The type of account (Personal or Impersonal).
+        p_ac (Ac): The parent account, if any.
+        cat (str): The category of the account.
+        mem (Member): Associated member for personal accounts.
+        code (str): A unique code for the account.
+    """
+
     ASSET = "AS"
     LIABILITY = "LI"
     INCOME = "IN"
@@ -43,7 +84,9 @@ class Ac(models.Model):
     p_ac = models.ForeignKey(
         "self", null=True, blank=True, default=None, on_delete=models.PROTECT
     )
-    cat = models.CharField(max_length=2, blank=True, choices=CATEGORY_CHOICES)
+    cat = models.CharField(
+        max_length=2, blank=True, default=None, choices=CATEGORY_CHOICES
+    )
     mem = models.ForeignKey(
         Member, null=True, blank=True, default=None, on_delete=models.PROTECT
     )
@@ -52,25 +95,50 @@ class Ac(models.Model):
     )
 
     def __str__(self):
-        string = f"{self.name}->({self.code})"
+        string = f"{self.name} ({self.code})"
         return string
 
-    def who_am_i(self):
-        ac_is = dict.fromkeys(["parent", "child", "single"], None)
-        if not self.cat:
-            ac_is["child"] = True
-            return ac_is
-        elif self.ac_set.exists():
-            ac_is["parent"] = True
-            return ac_is
-        elif self.cat and not self.ac_set.exists():
-            ac_is["single"] = True
-            return ac_is
-        else:
-            return "Something went wrong! Maybe this account should not exist"
+    @property
+    def is_root(self):
+        """Check if the account is a root account (has category and no parent)."""
+        return self.cat is not None and self.p_ac is None
+
+    @property
+    def is_parent(self):
+        """Check if the account is a parent account (is root and has children)."""
+        return self.is_root and self.ac_set.exists()
+
+    @property
+    def is_child(self):
+        """Check if the account is a child account (has parent and no category)."""
+        return self.p_ac is not None and self.cat is None
+
+    # A root but not a parent and not a child, with splits
+    @property
+    def is_standalone(self):
+        """
+        Check if the account is a standalone account.
+
+        A standalone account is a root account that is not a parent and has splits.
+        """
+        return self.is_root and not self.is_parent and self.split_set.exists()
 
     def bal(self, start_date=None, end_date=None):
-        if self.who_am_i()["parent"]:
+        """
+        Calculate the balance for this account.
+
+        For parent accounts, it includes the balances of all child accounts.
+
+        Args:
+            start_date (date, optional): Start date for balance calculation.
+            end_date (date, optional): End date for balance calculation.
+
+        Returns:
+            dict: A dictionary containing net balance, net debit, net credit,
+                  total debit, and total credit.
+        """
+
+        if self.is_parent:
             sps = Split.objects.filter(ac__p_ac=self)
         else:
             sps = self.split_set.all()
@@ -80,86 +148,252 @@ class Ac(models.Model):
         if end_date:
             sps = sps.filter(tx__tx_date__lte=end_date)
 
-        aggregates = sps.aggregate(
-            dr_sum=Sum("am", filter=Q(t_sp="dr")), cr_sum=Sum("am", filter=Q(t_sp="cr"))
+        balances = sps.aggregate(
+            total_debit=Sum(
+                Case(
+                    When(t_sp="dr", then=F("am")),
+                )
+            ),
+            total_credit=Sum(
+                Case(
+                    When(t_sp="cr", then=F("am")),
+                )
+            ),
         )
 
-        dr_sum = aggregates["dr_sum"] or Decimal(0)
-        cr_sum = aggregates["cr_sum"] or Decimal(0)
-        diff = dr_sum - cr_sum
+        total_debit = balances["total_debit"] or Decimal(0)
+        total_credit = balances["total_credit"] or Decimal(0)
 
-        return {"dr_sum": dr_sum, "cr_sum": cr_sum, "diff": diff}
+        # handle child don't have category (TODO: rethink if child should have category too for consistency)
+        ac_cat = self.p_ac.cat if self.is_child else self.cat
+
+        if ac_cat in [self.ASSET, self.EXPENSES]:
+            net_balance = total_debit - total_credit
+            net_debit = max(net_balance, Decimal(0))
+            net_credit = max(-net_balance, Decimal(0))
+        elif ac_cat in [self.LIABILITY, self.INCOME]:
+            net_balance = total_credit - total_debit
+            net_debit = max(-net_balance, Decimal(0))
+            net_credit = max(net_balance, Decimal(0))
+
+        return {
+            "net_balance": net_balance,
+            "net_debit": net_debit,
+            "net_credit": net_credit,
+            "total_debit": total_debit,
+            "total_credit": total_credit,
+        }
 
     @classmethod
-    def total_bal(cls, cat=None, start_date=None, end_date=None):
-        # if no category in argument, get all parent and single accounts
-        if cat is None:
-            acs = cls.objects.filter(p_ac=None)
-        # if category in argument, get parent and single accounts of that category
-        # dont get child accounts regardless
-        else:
-            acs = cls.objects.filter(cat=cat)
+    def get_flat_balances(cls, cat=None, start_date=None, end_date=None):
+        """
+        Get balances for all top-level accounts.
 
-        tds = Decimal(0)
-        tcs = Decimal(0)
-        for ac in acs:
-            bals = ac.bal(start_date, end_date)
-            tds += bals["dr_sum"]
-            tcs += bals["cr_sum"]
-        diff = tds - tcs
+        Args:
+            cat (str, optional): Category to filter accounts.
+            start_date (date, optional): Start date for balance calculation.
+            end_date (date, optional): End date for balance calculation.
 
-        return {"total_dr_sum": tds, "total_cr_sum": tcs, "diff": diff}
+        Returns:
+            list: List of dictionaries containing account and balance information.
+        """
+
+        top_level_accounts = cls.objects.filter(p_ac__isnull=True, cat__isnull=False)
+        if cat:
+            top_level_accounts = top_level_accounts.filter(cat=cat)
+
+        return [
+            {"account": account, "balance": account.bal(start_date, end_date)}
+            for account in top_level_accounts
+        ]
+
+    @classmethod
+    def get_hierarchical_balances(cls, cat=None, start_date=None, end_date=None):
+        """
+        Get hierarchical balances for all top-level accounts and their children.
+
+        Args:
+            cat (str, optional): Category to filter accounts.
+            start_date (date, optional): Start date for balance calculation.
+            end_date (date, optional): End date for balance calculation.
+
+        Returns:
+            list: Nested list of dictionaries containing account, balance,
+                  and children information.
+        """
+
+        top_level_accounts = cls.objects.filter(p_ac__isnull=True, cat__isnull=False)
+        if cat:
+            top_level_accounts = top_level_accounts.filter(cat=cat)
+
+        result = [
+            {
+                "account": account,
+                "balance": account.bal(start_date, end_date),
+                "children": [
+                    {"account": child, "balance": child.bal(start_date, end_date)}
+                    for child in account.ac_set.all()
+                ],
+            }
+            for account in top_level_accounts
+        ]
+
+        return result
 
     @classmethod
     def validate_accounting_equation(cls):
-        total_bals = cls.total_bal()
-        if total_bals["diff"] != 0:
+        """
+        Validate that the accounting equation (Assets = Liabilities + Equity) holds.
+
+        Raises:
+            AccountingEquationViolationError: If the equation doesn't balance.
+
+        Returns:
+            bool: True if the equation balances.
+        """
+
+        total_balance = Split.objects.aggregate(
+            total_debit=Sum("am", filter=models.Q(t_sp="dr")),
+            total_credit=Sum("am", filter=models.Q(t_sp="cr")),
+        )
+
+        total_debit = total_balance["total_debit"] or Decimal("0")
+        total_credit = total_balance["total_credit"] or Decimal("0")
+        difference = total_debit - total_credit
+
+        if difference != Decimal("0"):
             raise exceptions.AccountingEquationViolationError(
-                'Dr, Cr side not balanced; equation, "AS=LI+CA" not true;'
+                f"Accounting equation violation. Difference between debits and credits: {difference}"
             )
+
+        return True
 
 
 @receiver(signals.pre_save, sender=Ac)
 def raise_exceptions_ac(sender, **kwargs):
+    """
+    Validate account constraints before saving.
+
+    Raises various exceptions if account constraints are violated.
+    """
+
     ac_instance = kwargs["instance"]
-    if not ac_instance.p_ac and not ac_instance.cat:
-        raise exceptions.OrphanAccountCreationError("must have a parent or category")
 
-    if ac_instance.p_ac:
+    if not ac_instance.is_root and not ac_instance.is_child:
+        raise exceptions.InvalidAccountError(
+            "Account must be either a root account or a child account"
+        )
+
+    if ac_instance.is_child:
         if ac_instance.cat:
-            raise exceptions.AccountTypeOnChildAccountError(
-                "category on a child not allowed"
+            raise exceptions.CategoryOnChildAccountError(
+                "Child account cannot have a category"
             )
 
-        elif ac_instance.p_ac.split_set.exists():
-            raise exceptions.SingleAccountIsNotParentError(
-                "single account cannot be a parent"
+        elif ac_instance.p_ac.is_standalone:
+            raise exceptions.StandaloneAccountCannotBeParentError(
+                "Standalone account (with transactions) cannot be a parent"
             )
 
-    if ac_instance.t_ac == "P":
-        if ac_instance.mem is None:
-            raise exceptions.MemberRequiredOnPersonalAcError(
-                "Personal Ac must have a member"
+        elif ac_instance.p_ac.is_child:
+            raise exceptions.ChildAccountCannotBeParentError(
+                "A child account cannot be a parent"
             )
 
-    if ac_instance.t_ac == "I":
-        if ac_instance.mem:
-            raise exceptions.MemberOnImpersonalAcError(
-                "Impersonal Ac cannot have a member"
-            )
+    if ac_instance.t_ac == Ac.PERSONAL and not ac_instance.mem_id:
+        raise exceptions.MemberRequiredOnPersonalAcError(
+            "Personal Ac must have a member"
+        )
+
+    if ac_instance.t_ac == Ac.IMPERSONAL and ac_instance.mem_id:
+        raise exceptions.MemberOnImpersonalAcError("Impersonal Ac cannot have a member")
 
 
 class Transaction(models.Model):
+    """
+    Represents a financial transaction.
+
+    Attributes:
+        created_at (datetime): Timestamp of when the transaction was created.
+        tx_date (date): The date of the transaction.
+        desc (str): Description of the transaction.
+    """
+
     created_at = models.DateTimeField(auto_now_add=True, editable=False)
     tx_date = models.DateField(default=timezone.now)
-    desc = models.TextField(blank=True, default="")
+    desc = models.TextField()
 
     def __str__(self):
         string = f"{self.pk}->{self.split_set.count()}"
         return string
 
+    def validate_transaction(self):
+        """
+        Validate that the transaction is balanced.
+
+        Raises:
+            EmptyTransactionError: If the transaction has no splits.
+            UnbalancedTransactionError: If debits don't equal credits.
+
+        Returns:
+            bool: True if the transaction is valid.
+        """
+
+        # None is returned if no splits are found
+        split_sums = self.split_set.aggregate(
+            total_debit=Sum("am", filter=Q(t_sp="dr")),
+            total_credit=Sum("am", filter=Q(t_sp="cr")),
+        )
+
+        total_debit = split_sums["total_debit"]
+        total_credit = split_sums["total_credit"]
+
+        if total_debit is None and total_credit is None:
+            raise exceptions.EmptyTransactionError(
+                "Transaction must have at least one split each for debit and credit"
+            )
+
+        # this also handles when only one type of split is present
+        if total_debit != total_credit:
+            raise exceptions.UnbalancedTransactionError(
+                f"Transaction is not balanced. Debit: {total_debit}, Credit: {total_credit}"
+            )
+
+        return True
+
+    def revert_transaction(self):
+        """
+        Create a new transaction that reverts this transaction.
+
+        Returns:
+            Transaction: The newly created revert transaction.
+
+        Note:
+            This method is executed within a database transaction. If any part
+            of the operation fails, all changes will be rolled back.
+        """
+
+        with transaction.atomic():
+            revert_tx = Transaction.objects.create(desc=f"Revert: {self.desc}")
+
+            for sp in self.split_set.all():
+                t_sp = Split.DEBIT if sp.t_sp == Split.CREDIT else Split.CREDIT
+                Split.objects.create(tx=revert_tx, ac=sp.ac, t_sp=t_sp, am=sp.am)
+
+        return revert_tx
+
 
 class Split(models.Model):
+    """
+    Represents a single debit or credit entry in a transaction.
+
+    Attributes:
+        tx (Transaction): The associated transaction.
+        ac (Ac): The account affected by this split.
+        t_sp (str): The type of split (debit or credit).
+        am (Decimal): The amount of the split.
+    """
+
     DEBIT = "dr"
     CREDIT = "cr"
     TYPE_SPLIT_CHOICES = [
@@ -178,8 +412,13 @@ class Split(models.Model):
 
 @receiver(signals.pre_save, sender=Split)
 def raise_exceptions_split(sender, **kwargs):
+    """
+    Validate split constraints before saving.
+
+    Raises:
+        TransactionOnParentAcError: If attempting to create a split for a parent account.
+    """
+
     sp_instance = kwargs["instance"]
-    if (sp_instance.ac.who_am_i())["parent"]:
-        raise exceptions.TransactionOnParentAcError("transaction on parent not allowed")
-    if sp_instance.am <= 0:
-        raise exceptions.ZeroAmountError("amount must be greater than 0")
+    if sp_instance.ac.is_parent:
+        raise exceptions.TransactionOnParentAcError("Transaction on parent not allowed")

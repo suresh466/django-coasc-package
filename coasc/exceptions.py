@@ -6,7 +6,7 @@ class AccountingEquationViolationError(AccountError):
     pass
 
 
-class AccountTypeOnChildAccountError(AccountError):
+class CategoryOnChildAccountError(AccountError):
     pass
 
 
@@ -14,15 +14,15 @@ class TransactionOnParentAcError(AccountError):
     pass
 
 
-class OrphanAccountCreationError(AccountError):
+class InvalidAccountError(AccountError):
     pass
 
 
-class SelfReferencingError(AccountError):
+class StandaloneAccountCannotBeParentError(AccountError):
     pass
 
 
-class SingleAccountIsNotParentError(AccountError):
+class ChildAccountCannotBeParentError(AccountError):
     pass
 
 
@@ -31,12 +31,4 @@ class MemberRequiredOnPersonalAcError(AccountError):
 
 
 class MemberOnImpersonalAcError(AccountError):
-    pass
-
-
-class JournalError(Exception):
-    pass
-
-
-class ZeroAmountError(JournalError):
     pass
