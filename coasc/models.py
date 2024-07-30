@@ -117,11 +117,9 @@ class Ac(models.Model):
     @property
     def is_standalone(self):
         """
-        Check if the account is a standalone account.
+        Check if the account is a standalone account (is root and has no children)."""
 
-        A standalone account is a root account that is not a parent and has splits.
-        """
-        return self.is_root and not self.is_parent and self.split_set.exists()
+        return self.is_root and not self.is_parent
 
     def bal(self, start_date=None, end_date=None):
         """
