@@ -118,7 +118,7 @@ class AccountModelTest(TestCase):
         tx = Transaction.objects.create(desc="demo")
         Split.objects.create(tx=tx, ac=single, t_sp="dr", am=1)
 
-        with self.assertRaises(exceptions.StandaloneAccountCannotBeParentError()):
+        with self.assertRaises(exceptions.AccountWithTransactionCannotBeParentError()):
             Ac.objects.create(name="child", code="3.1", p_ac=single)
 
     def test_raises_exception_if_personal_ac_has_no_member(self):

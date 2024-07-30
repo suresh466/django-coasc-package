@@ -18,7 +18,7 @@ class InvalidAccountError(AccountError):
     pass
 
 
-class StandaloneAccountCannotBeParentError(AccountError):
+class AccountWithTransactionCannotBeParentError(AccountError):
     pass
 
 

@@ -288,16 +288,15 @@ def raise_exceptions_ac(sender, **kwargs):
                 "Child account cannot have a category"
             )
 
-        elif ac_instance.p_ac.is_standalone:
-            raise exceptions.StandaloneAccountCannotBeParentError(
-                "Standalone account (with transactions) cannot be a parent"
+        elif ac_instance.p_ac.split_set.exists():
+            raise exceptions.AccountWithTransactionCannotBeParentError(
+                "Account with transactions cannot be a parent"
             )
 
         elif ac_instance.p_ac.is_child:
             raise exceptions.ChildAccountCannotBeParentError(
                 "A child account cannot be a parent"
             )
-
     if ac_instance.t_ac == Ac.PERSONAL and not ac_instance.mem_id:
         raise exceptions.MemberRequiredOnPersonalAcError(
             "Personal Ac must have a member"
