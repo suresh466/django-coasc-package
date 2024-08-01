@@ -32,3 +32,15 @@ class MemberRequiredOnPersonalAcError(AccountError):
 
 class MemberOnImpersonalAcError(AccountError):
     pass
+
+
+class TransactionError(Exception):
+    pass
+
+
+class EmptyTransactionError(TransactionError):
+    pass
+
+
+class UnbalancedTransactionError(TransactionError):
+    pass
